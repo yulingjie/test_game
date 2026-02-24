@@ -1,95 +1,105 @@
-# Bevy + rquickjs 游戏示例
+# Bevy + TypeScript WASM Component Model 游戏框架
 
-这是一个使用 Rust 的 Bevy 游戏引擎和 rquickjs JavaScript 引擎构建的简单游戏示例。
+用 **Rust / Bevy** 作为游戏引擎，用 **TypeScript** 编写游戏逻辑，通过 **WASM Component Model（WIT）** 将两者强类型连接。
 
-## 功能特性
+## 架构概览
 
-- ✅ **Bevy 游戏引擎**: 现代化的 ECS 架构游戏引擎
-- ✅ **rquickjs JavaScript 引擎**: 集成 QuickJS JavaScript 引擎
-- ✅ **键盘控制**: 使用方向键控制蓝色方块移动
-- ✅ **边界检测**: 自动限制方块在屏幕范围内移动
-- ✅ **定时 JavaScript 执行**: 每2秒执行一次 JavaScript 代码
+```
+┌─────────────────────────────────────────────────────┐
+│                   Bevy（Rust）                       │
+│  ECS 渲染 / 输入 / UI 实体管理                        │
+│                    ↕ wasmtime                        │
+│              WIT 接口契约（game.wit）                 │
+│                    ↕ jco componentize                │
+│              TypeScript 游戏逻辑                      │
+│  键盘映射 / 位置更新 / UI 事件 / 面板管理              │
+└─────────────────────────────────────────────────────┘
+```
+
+- **`wit/game.wit`** — 唯一真相来源，定义 Bevy ↔ TS 的全部接口
+- **`game-logic/`** — TypeScript 实现，编译为 WASM Component
+- **`src/main.rs`** — Bevy 宿主，通过 `wasmtime::component::bindgen!` 零手写桥接调用 TS
 
 ## 项目结构
 
 ```
 test_game/
-├── Cargo.toml          # Rust 项目配置文件
+├── wit/
+│   └── game.wit              # WIT 接口契约（唯一真相来源）
+├── game-logic/               # TypeScript 游戏逻辑
+│   ├── src/
+│   │   ├── index.ts          # 游戏逻辑实现
+│   │   └── types/
+│   │       └── bevy-api.d.ts # Bevy Host API 类型声明
+│   ├── package.json
+│   └── tsconfig.json
 ├── src/
-│   └── main.rs         # 主程序文件
-└── README.md           # 项目说明文档
+│   └── main.rs               # Bevy 宿主 + wasmtime 运行时
+├── assets/
+│   └── game_logic.wasm       # TS 编译产物（由 npm run build 生成）
+├── build.rs                  # 编译期 WIT 变更检测
+└── Cargo.toml
 ```
 
-## 运行方法
+## 环境依赖
 
-1. 确保已安装 Rust 和 Cargo
-2. 在项目目录下运行：
-   ```bash
-   cargo run
-   ```
+| 工具 | 版本要求 | 说明 |
+|------|----------|------|
+| Rust | stable | `rustup update` |
+| Node.js | ≥ 18 | 编译 TypeScript |
+| jco | 自动安装 | `@bytecodealliance/jco` |
+
+## 快速开始
+
+### 1. 安装 TypeScript 依赖
+
+```bash
+cd game-logic
+npm install
+```
+
+### 2. 编译 TypeScript → WASM Component
+
+```bash
+# 在 game-logic/ 目录下
+npm run build
+# 产物输出到 ../assets/game_logic.wasm
+```
+
+### 3. 运行游戏
+
+```bash
+# 在项目根目录
+cargo run
+```
 
 ## 游戏操作
 
-- **方向键 ↑↓←→**: 控制蓝色方块移动
-- **JavaScript 执行**: 每2秒自动执行 JavaScript 代码并输出结果
+| 按键 | 功能 |
+|------|------|
+| `↑ ↓ ← →` | 控制蓝色方块移动 |
+| `E` | 打开 / 关闭 UI 面板 |
+
+## 开发工作流
+
+修改不同层级时，需要执行的步骤：
+
+| 修改内容 | 需要执行 |
+|----------|----------|
+| `wit/game.wit` | 同步更新 `bevy-api.d.ts` + `main.rs` → `npm run build` → `cargo run` |
+| `game-logic/src/index.ts` | `npm run build` → `cargo run` |
+| `src/main.rs` | `cargo run` |
+
+> 详细设计文档见 [DESIGN.md](./DESIGN.md)
 
 ## 技术栈
 
-- **Bevy 0.13**: 游戏引擎
-- **rquickjs 0.5**: JavaScript 引擎
-- **Rust 2021 Edition**: 编程语言
-
-## 代码示例
-
-### JavaScript 集成
-
-游戏每2秒执行一次 JavaScript 代码：
-
-```rust
-fn execute_javascript() {
-    let rt = Runtime::new().unwrap();
-    let ctx = Context::full(&rt).unwrap();
-    
-    ctx.with(|ctx| {
-        // 执行数学计算
-        let result: i32 = ctx.eval("2 + 3 * 4").unwrap();
-        println!("JavaScript计算结果: {}", result);
-        
-        // 执行自定义函数
-        let greeting: String = ctx.eval("greet('Bevy Game')").unwrap();
-        println!("{}", greeting);
-    });
-}
-```
-
-### 游戏实体系统
-
-使用 Bevy 的 ECS 系统管理游戏实体：
-
-```rust
-#[derive(Component)]
-struct Player;
-
-#[derive(Component)]
-struct Velocity(Vec2);
-
-fn move_player(time: Res<Time>, mut query: Query<(&mut Transform, &Velocity), With<Player>>) {
-    for (mut transform, velocity) in query.iter_mut() {
-        transform.translation.x += velocity.0.x * time.delta_seconds();
-        transform.translation.y += velocity.0.y * time.delta_seconds();
-    }
-}
-```
-
-## 扩展建议
-
-这个项目可以作为以下功能的起点：
-
-1. **游戏逻辑脚本化**: 使用 JavaScript 编写游戏逻辑
-2. **热重载**: 动态加载和更新 JavaScript 代码
-3. **UI 集成**: 添加游戏界面和交互元素
-4. **物理引擎**: 集成更复杂的物理效果
-5. **网络功能**: 添加多人游戏支持
+- **Bevy 0.13** — ECS 游戏引擎
+- **wasmtime** — WASM Component Model 运行时
+- **WIT（WebAssembly Interface Types）** — 跨语言接口契约
+- **jco（@bytecodealliance/jco）** — TypeScript → WASM Component 编译器
+- **TypeScript** — 游戏逻辑脚本语言
+- **Rust 2021 Edition**
 
 ## 许可证
 
