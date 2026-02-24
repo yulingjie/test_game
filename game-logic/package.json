@@ -1,0 +1,17 @@
+{
+  "name": "game-logic",
+  "version": "1.0.0",
+  "description": "游戏逻辑 WASM Component（TypeScript + WIT 路径 B）",
+  "type": "module",
+  "scripts": {
+    "build": "npm run compile && npm run componentize",
+    "compile": "tsc",
+    "componentize": "jco componentize dist/index.js --wit ../wit/game.wit --world-name game-world --out ../assets/game_logic.wasm",
+    "build:watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "^1.3",
+    "@bytecodealliance/componentize-js": "^0.10",
+    "typescript": "^5.4"
+  }
+}

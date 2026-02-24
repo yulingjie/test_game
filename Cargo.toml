@@ -1,0 +1,13 @@
+[package]
+name = "test_game"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test_game"
+path = "src/main.rs"
+
+[dependencies]
+bevy          = "0.13"
+wasmtime      = { version = "18", features = ["component-model"] }
+wasmtime-wasi = "18"

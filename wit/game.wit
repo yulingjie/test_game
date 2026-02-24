@@ -1,0 +1,98 @@
+// ─── game.wit ────────────────────────────────────────────────────────────────
+//
+// 路径 B 的核心：WIT 文件是 Rust 和 TypeScript 之间的唯一契约。
+// 修改此文件后，两侧编译器会同步报错，彻底消除运行时接口不匹配问题。
+//
+// 接口方向说明：
+//   export game-logic  → Bevy 调用 TS（TS 实现游戏逻辑）
+//   import bevy-api    → TS 调用 Bevy（Bevy 实现 ECS 操作）
+
+package game:logic@0.1.0;
+
+// ─── TS 调用 Bevy 的能力（Bevy 实现，TS 调用）────────────────────────────────
+interface bevy-api {
+    // ── UI 操作 ──────────────────────────────────────────────────────────────
+
+    /// 创建背景面板（声明式，通过 key 引用）
+    /// x/y 为相对屏幕中心的偏移（像素），width/height 为尺寸
+    /// color-r/g/b/a 为 RGBA 颜色（0.0~1.0）
+    record panel-config {
+        key: string,
+        x: float32,
+        y: float32,
+        width: float32,
+        height: float32,
+        color-r: float32,
+        color-g: float32,
+        color-b: float32,
+        color-a: float32,
+    }
+
+    /// 创建文字节点，挂载到指定父实体下
+    record text-config {
+        key: string,
+        parent-key: string,
+        text: string,
+        font-size: float32,
+        color-r: float32,
+        color-g: float32,
+        color-b: float32,
+    }
+
+    spawn-panel: func(config: panel-config);
+    spawn-text:  func(config: text-config);
+
+    /// 销毁实体（含所有子节点），通过 key 引用
+    despawn: func(key: string);
+
+    /// 显示或隐藏实体，通过 key 引用
+    set-visible: func(key: string, visible: bool);
+
+    // ── 日志 ─────────────────────────────────────────────────────────────────
+    log: func(msg: string);
+}
+
+// ─── Bevy 调用 TS 的能力（TS 实现，Bevy 调用）────────────────────────────────
+interface game-logic {
+    // ── 数据类型 ──────────────────────────────────────────────────────────────
+
+    record keyboard-input {
+        right: bool,
+        left:  bool,
+        up:    bool,
+        down:  bool,
+    }
+
+    record update-result {
+        x: float32,
+        y: float32,
+    }
+
+    record player-state {
+        x:     float32,
+        y:     float32,
+        speed: float32,
+    }
+
+    // ── 函数 ─────────────────────────────────────────────────────────────────
+
+    /// 键盘映射：将原始按键状态转换为游戏方向（可在 TS 中做按键重映射）
+    process-keyboard: func(input: keyboard-input) -> keyboard-input;
+
+    /// 游戏逻辑更新：根据键盘状态和 delta 时间计算新位置
+    update-game: func(
+        keyboard: keyboard-input,
+        state:    player-state,
+        delta:    float32,
+    ) -> update-result;
+
+    /// UI 事件回调：Bevy 检测到按键等事件时调用，TS 决定如何响应
+    /// event-type: "toggle_panel" | "close_panel" | ...
+    on-ui-event: func(event-type: string);
+}
+
+// ─── World：声明 WASM Component 的完整接口 ───────────────────────────────────
+world game-world {
+    import bevy-api;   // TS 可调用 Bevy 的能力
+    export game-logic; // Bevy 可调用 TS 的能力
+}
